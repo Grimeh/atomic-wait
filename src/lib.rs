@@ -1,7 +1,7 @@
 #![no_std]
 #![doc = include_str!("../README.md")]
 
-use core::sync::atomic::{AtomicPtr, AtomicU32};
+use core::sync::atomic::{AtomicPtr, AtomicU32, AtomicU64};
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 #[path = "linux.rs"]
@@ -32,6 +32,15 @@ pub fn wait(atomic: &AtomicU32, value: u32) {
 ///
 /// This function might also return spuriously,
 /// without a corresponding wake operation.
+#[inline]
+pub fn wait_u64(atomic: &AtomicU64, value: u64) {
+    platform::wait_u64(atomic, value)
+}
+
+/// If the value is `value`, wait until woken up.
+///
+/// This function might also return spuriously,
+/// without a corresponding wake operation.
 pub fn wait_ptr<T>(atomic: *const AtomicPtr<T>, value: *mut T) {
     platform::wait_ptr(atomic, value)
 }
@@ -48,6 +57,14 @@ pub fn wake_one(atomic: *const AtomicU32) {
 ///
 /// It's okay if the pointer dangles or is null.
 #[inline]
+pub fn wake_one_u64(atomic: *const AtomicU64) {
+    platform::wake_one_u64(atomic);
+}
+
+/// Wake one thread that is waiting on this atomic.
+///
+/// It's okay if the pointer dangles or is null.
+#[inline]
 pub fn wake_one_ptr<T>(atomic: *const AtomicPtr<T>) {
     platform::wake_one_ptr(atomic);
 }
@@ -58,6 +75,14 @@ pub fn wake_one_ptr<T>(atomic: *const AtomicPtr<T>) {
 #[inline]
 pub fn wake_all(atomic: *const AtomicU32) {
     platform::wake_all(atomic);
+}
+
+/// Wake all threads that are waiting on this atomic.
+///
+/// It's okay if the pointer dangles or is null.
+#[inline]
+pub fn wake_all_u64(atomic: *const AtomicU64) {
+    platform::wake_all_u64(atomic);
 }
 
 /// Wake all threads that are waiting on this atomic.
