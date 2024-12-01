@@ -42,7 +42,7 @@ pub fn wait_u64(atomic: &AtomicU64, value: u64) {
 ///
 /// This function might also return spuriously,
 /// without a corresponding wake operation.
-pub fn wait_ptr<T>(atomic: *const AtomicPtr<T>, value: *mut T) {
+pub fn wait_ptr<T>(atomic: &AtomicPtr<T>, value: *mut T) {
     platform::wait_ptr(atomic, value)
 }
 

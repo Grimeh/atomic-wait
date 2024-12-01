@@ -11,10 +11,7 @@
     target_os = "openbsd",
     target_os = "dragonfly",
     target_os = "fuchsia",
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "tvos",
-    target_os = "watchos",
+    target_vendor = "apple",
 ))]
 #![allow(dead_code)]
 
@@ -26,6 +23,8 @@ mod util;
 use errno::errno;
 use core::sync::atomic::AtomicU32;
 use core::time::Duration;
+use std::ffi::c_void;
+use std::sync::atomic::{AtomicPtr, AtomicU64};
 
 /// Wait for a futex_wake operation to wake us.
 ///
@@ -164,12 +163,7 @@ pub fn futex_wake_all(futex: &AtomicU32) {
 /// https://github.com/apple-oss-distributions/xnu/blob/1031c584a5e37aff177559b9f69dbd3c8c3fd30a/bsd/sys/ulock.h#L69
 /// for the header file of the private API, along with its usage in libpthread
 /// https://github.com/apple-oss-distributions/libpthread/blob/d8c4e3c212553d3e0f5d76bb7d45a8acd61302dc/src/pthread_cond.c#L463
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "tvos",
-    target_os = "watchos",
-))]
+#[cfg(target_vendor = "apple")]
 mod apple {
     use super::unix_weak::weak;
     use core::ffi::{c_int, c_void};
@@ -216,19 +210,10 @@ mod apple {
     }
 }
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "tvos",
-    target_os = "watchos",
-))]
-pub fn futex_wait(futex: &AtomicU32, expected: u32, timeout: Option<Duration>) -> bool {
+#[cfg(target_vendor = "apple")]
+fn futex_wait_inner(addr: *mut c_void, size: usize, expected: u64, timeout: Option<Duration>) -> bool {
     use apple::*;
-    use core::mem::size_of;
 
-    let addr = futex.as_ptr().cast();
-    let value = expected as u64;
-    let size = size_of::<u32>();
     if let Some(timeout) = timeout {
         let timeout_ns = timeout.as_nanos().clamp(1, u64::MAX as u128) as u64;
         let timeout_ms = timeout.as_micros().clamp(1, u32::MAX as u128) as u32;
@@ -237,7 +222,7 @@ pub fn futex_wait(futex: &AtomicU32, expected: u32, timeout: Option<Duration>) -
             let r = unsafe {
                 wait(
                     addr,
-                    value,
+                    expected,
                     size,
                     OS_SYNC_WAIT_ON_ADDRESS_NONE,
                     OS_CLOCK_MACH_ABSOLUTE_TIME,
@@ -256,14 +241,14 @@ pub fn futex_wait(futex: &AtomicU32, expected: u32, timeout: Option<Duration>) -
                 wait(
                     UL_COMPARE_AND_WAIT | ULF_NO_ERRNO,
                     addr,
-                    value,
+                    expected,
                     timeout_ns,
                     0,
                 ) != -libc::ETIMEDOUT
             }
         } else if let Some(wait) = __ulock_wait.get() {
             unsafe {
-                wait(UL_COMPARE_AND_WAIT | ULF_NO_ERRNO, addr, value, timeout_ms)
+                wait(UL_COMPARE_AND_WAIT | ULF_NO_ERRNO, addr, expected, timeout_ms)
                     != -libc::ETIMEDOUT
             }
         } else {
@@ -272,11 +257,11 @@ pub fn futex_wait(futex: &AtomicU32, expected: u32, timeout: Option<Duration>) -
     } else {
         if let Some(wait) = os_sync_wait_on_address.get() {
             unsafe {
-                wait(addr, value, size, OS_SYNC_WAIT_ON_ADDRESS_NONE);
+                wait(addr, expected, size, OS_SYNC_WAIT_ON_ADDRESS_NONE);
             }
         } else if let Some(wait) = __ulock_wait.get() {
             unsafe {
-                wait(UL_COMPARE_AND_WAIT | ULF_NO_ERRNO, addr, value, 0);
+                wait(UL_COMPARE_AND_WAIT | ULF_NO_ERRNO, addr, expected, 0);
             }
         } else {
             panic!("your system is below the minimum supported version of Rust");
@@ -285,19 +270,41 @@ pub fn futex_wait(futex: &AtomicU32, expected: u32, timeout: Option<Duration>) -
     }
 }
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "tvos",
-    target_os = "watchos",
-))]
-pub fn futex_wake(futex: &AtomicU32) -> bool {
-    use apple::*;
+#[cfg(target_vendor = "apple")]
+pub fn futex_wait(futex: &AtomicU32, expected: u32, timeout: Option<Duration>) -> bool {
     use core::mem::size_of;
 
     let addr = futex.as_ptr().cast();
+    let value = expected as u64;
+    let size = size_of::<u32>();
+    futex_wait_inner(addr, size, value, timeout)
+}
+
+#[cfg(target_vendor = "apple")]
+pub fn futex_wait_u64(futex: &AtomicU64, expected: u64, timeout: Option<Duration>) -> bool {
+    use core::mem::size_of;
+
+    let addr = futex.as_ptr().cast();
+    let size = size_of::<u64>();
+    futex_wait_inner(addr, size, expected, timeout)
+}
+
+#[cfg(target_vendor = "apple")]
+pub fn futex_wait_ptr<T>(futex: &AtomicPtr<T>, expected: *mut T, timeout: Option<Duration>) -> bool {
+    use core::mem::size_of;
+
+    let addr = futex.as_ptr().cast();
+    let size = size_of::<*mut T>();
+    let value = expected as u64;
+    futex_wait_inner(addr, size, value, timeout)
+}
+
+#[cfg(any(target_vendor = "apple"))]
+fn futex_wake_inner(addr: *mut c_void, size: usize) -> bool {
+    use apple::*;
+    
     if let Some(wake) = os_sync_wake_by_address_any.get() {
-        unsafe { wake(addr, size_of::<u32>(), OS_SYNC_WAKE_BY_ADDRESS_NONE) == 0 }
+        unsafe { wake(addr, size, OS_SYNC_WAKE_BY_ADDRESS_NONE) == 0 }
     } else if let Some(wake) = __ulock_wake.get() {
         // __ulock_wake can get interrupted, so retry until either waking up a
         // waiter or failing because there are no waiters (ENOENT).
@@ -322,22 +329,38 @@ pub fn futex_wake(futex: &AtomicU32) -> bool {
     }
 }
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "tvos",
-    target_os = "watchos",
-))]
-pub fn futex_wake_all(futex: &AtomicU32) {
-    use apple::*;
+#[cfg(any(target_vendor = "apple"))]
+pub fn futex_wake(futex: &AtomicU32) -> bool {
     use core::mem::size_of;
-    use std::io::Error;
 
     let addr = futex.as_ptr().cast();
+    futex_wake_inner(addr, size_of::<u32>())
+}
 
+#[cfg(any(target_vendor = "apple"))]
+pub fn futex_wake_u64(futex: &AtomicU64) -> bool {
+    use core::mem::size_of;
+
+    let addr = futex.as_ptr().cast();
+    futex_wake_inner(addr, size_of::<u64>())
+}
+
+#[cfg(any(target_vendor = "apple"))]
+pub fn futex_wake_ptr<T>(futex: &AtomicPtr<T>) -> bool {
+    use core::mem::size_of;
+
+    let addr = futex.as_ptr().cast();
+    futex_wake_inner(addr, size_of::<*mut T>())
+}
+
+#[cfg(target_vendor = "apple")]
+fn futex_wake_all_inner(addr: *mut c_void, size: usize) {
+    use apple::*;
+    use std::io::Error;
+    
     if let Some(wake) = os_sync_wake_by_address_all.get() {
         unsafe {
-            wake(addr, size_of::<u32>(), OS_SYNC_WAKE_BY_ADDRESS_NONE);
+            wake(addr, size, OS_SYNC_WAKE_BY_ADDRESS_NONE);
         }
     } else if let Some(wake) = __ulock_wake.get() {
         loop {
@@ -356,6 +379,30 @@ pub fn futex_wake_all(futex: &AtomicU32) {
     } else {
         panic!("your system is below the minimum supported version of Rust");
     }
+}
+
+#[cfg(target_vendor = "apple")]
+pub fn futex_wake_all(futex: &AtomicU32) {
+    use core::mem::size_of;
+
+    let addr = futex.as_ptr().cast();
+    futex_wake_all_inner(addr, size_of::<u32>());
+}
+
+#[cfg(target_vendor = "apple")]
+pub fn futex_wake_all_u64(futex: &AtomicU64) {
+    use core::mem::size_of;
+
+    let addr = futex.as_ptr().cast();
+    futex_wake_all_inner(addr, size_of::<u64>());
+}
+
+#[cfg(target_vendor = "apple")]
+pub fn futex_wake_all_ptr<T>(futex: &AtomicPtr<T>) {
+    use core::mem::size_of;
+
+    let addr = futex.as_ptr().cast();
+    futex_wake_all_inner(addr, size_of::<*mut T>());
 }
 
 #[cfg(target_os = "openbsd")]
