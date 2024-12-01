@@ -41,18 +41,18 @@ pub fn wait_ptr<T>(a: &AtomicPtr<T>, expected: *mut T) {
 }
 
 #[inline]
-pub fn wait_timeout(a: &AtomicU32, expected: u32, timeout: Option<Duration>) {
-    futex_wait(a, expected, timeout);
+pub fn wait_timeout(a: &AtomicU32, expected: u32, timeout: Option<Duration>) -> bool {
+    futex_wait(a, expected, timeout)
 }
 
 #[inline]
-pub fn wait_u64_timeout(a: &AtomicU64, expected: u64, timeout: Option<Duration>) {
-    futex_wait_u64(a, expected, timeout);
+pub fn wait_u64_timeout(a: &AtomicU64, expected: u64, timeout: Option<Duration>) -> bool {
+    futex_wait_u64(a, expected, timeout)
 }
 
 #[inline]
-pub fn wait_ptr_timeout<T>(a: &AtomicPtr<T>, expected: *mut T, timeout: Option<Duration>) {
-    futex_wait_ptr(a, expected, timeout);
+pub fn wait_ptr_timeout<T>(a: &AtomicPtr<T>, expected: *mut T, timeout: Option<Duration>) -> bool {
+    futex_wait_ptr(a, expected, timeout)
 }
 
 #[inline]

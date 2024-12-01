@@ -51,8 +51,10 @@ pub fn wait_ptr<T>(atomic: &AtomicPtr<T>, value: *mut T) {
 ///
 /// This function might also return spuriously,
 /// without a corresponding wake operation.
+/// 
+/// Returns false if the timeout expired
 #[inline]
-pub fn wait_timeout(atomic: &AtomicU32, value: u32, timeout: Option<Duration>) {
+pub fn wait_timeout(atomic: &AtomicU32, value: u32, timeout: Option<Duration>) -> bool {
     platform::wait_timeout(atomic, value, timeout)
 }
 
@@ -60,8 +62,10 @@ pub fn wait_timeout(atomic: &AtomicU32, value: u32, timeout: Option<Duration>) {
 ///
 /// This function might also return spuriously,
 /// without a corresponding wake operation.
+///
+/// Returns false if the timeout expired
 #[inline]
-pub fn wait_u64_timeout(atomic: &AtomicU64, value: u64, timeout: Option<Duration>) {
+pub fn wait_u64_timeout(atomic: &AtomicU64, value: u64, timeout: Option<Duration>) -> bool {
     platform::wait_u64_timeout(atomic, value, timeout)
 }
 
@@ -69,7 +73,9 @@ pub fn wait_u64_timeout(atomic: &AtomicU64, value: u64, timeout: Option<Duration
 ///
 /// This function might also return spuriously,
 /// without a corresponding wake operation.
-pub fn wait_ptr_timeout<T>(atomic: &AtomicPtr<T>, value: *mut T, timeout: Option<Duration>) {
+///
+/// Returns false if the timeout expired
+pub fn wait_ptr_timeout<T>(atomic: &AtomicPtr<T>, value: *mut T, timeout: Option<Duration>) -> bool {
     platform::wait_ptr_timeout(atomic, value, timeout)
 }
 
