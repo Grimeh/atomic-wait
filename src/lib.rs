@@ -1,7 +1,8 @@
-#![no_std]
 #![doc = include_str!("../README.md")]
 
 use core::sync::atomic::{AtomicPtr, AtomicU32, AtomicU64};
+
+mod unix_futex;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 #[path = "linux.rs"]
