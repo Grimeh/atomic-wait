@@ -1,6 +1,7 @@
 #![doc = include_str!("../README.md")]
 
 use core::sync::atomic::{AtomicPtr, AtomicU32, AtomicU64};
+use std::time::Duration;
 
 mod unix_futex;
 
@@ -44,6 +45,32 @@ pub fn wait_u64(atomic: &AtomicU64, value: u64) {
 /// without a corresponding wake operation.
 pub fn wait_ptr<T>(atomic: &AtomicPtr<T>, value: *mut T) {
     platform::wait_ptr(atomic, value)
+}
+
+/// If the value is `value`, wait until woken up.
+///
+/// This function might also return spuriously,
+/// without a corresponding wake operation.
+#[inline]
+pub fn wait_timeout(atomic: &AtomicU32, value: u32, timeout: Option<Duration>) {
+    platform::wait_timeout(atomic, value, timeout)
+}
+
+/// If the value is `value`, wait until woken up.
+///
+/// This function might also return spuriously,
+/// without a corresponding wake operation.
+#[inline]
+pub fn wait_u64_timeout(atomic: &AtomicU64, value: u64, timeout: Option<Duration>) {
+    platform::wait_u64_timeout(atomic, value, timeout)
+}
+
+/// If the value is `value`, wait until woken up.
+///
+/// This function might also return spuriously,
+/// without a corresponding wake operation.
+pub fn wait_ptr_timeout<T>(atomic: &AtomicPtr<T>, value: *mut T, timeout: Option<Duration>) {
+    platform::wait_ptr_timeout(atomic, value, timeout)
 }
 
 /// Wake one thread that is waiting on this atomic.

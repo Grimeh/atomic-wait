@@ -1,6 +1,7 @@
 use core::{
     sync::atomic::{AtomicU32, AtomicPtr, AtomicU64},
 };
+use std::time::Duration;
 use crate::unix_futex::*;
 
 // UPDATE 01/12/24
@@ -37,6 +38,21 @@ pub fn wait_u64(a: &AtomicU64, expected: u64) {
 #[inline]
 pub fn wait_ptr<T>(a: &AtomicPtr<T>, expected: *mut T) {
     futex_wait_ptr(a, expected, None);
+}
+
+#[inline]
+pub fn wait_timeout(a: &AtomicU32, expected: u32, timeout: Option<Duration>) {
+    futex_wait(a, expected, timeout);
+}
+
+#[inline]
+pub fn wait_u64_timeout(a: &AtomicU64, expected: u64, timeout: Option<Duration>) {
+    futex_wait_u64(a, expected, timeout);
+}
+
+#[inline]
+pub fn wait_ptr_timeout<T>(a: &AtomicPtr<T>, expected: *mut T, timeout: Option<Duration>) {
+    futex_wait_ptr(a, expected, timeout);
 }
 
 #[inline]
