@@ -170,9 +170,14 @@ mod apple {
 
     pub const OS_CLOCK_MACH_ABSOLUTE_TIME: u32 = 32;
     pub const OS_SYNC_WAIT_ON_ADDRESS_NONE: u32 = 0;
+    pub const OS_SYNC_WAIT_ON_ADDRESS_SHARED: u32 = 1;
     pub const OS_SYNC_WAKE_BY_ADDRESS_NONE: u32 = 0;
+    pub const OS_SYNC_WAKE_BY_ADDRESS_SHARED: u32 = 1;
 
     pub const UL_COMPARE_AND_WAIT: u32 = 1;
+    pub const UL_COMPARE_AND_WAIT_SHARED: u32 = 3;
+    pub const UL_COMPARE_AND_WAIT64: u32 = 5;
+    pub const UL_COMPARE_AND_WAIT64_SHARED: u32 = 6;
     pub const ULF_WAKE_ALL: u32 = 0x100;
     // The syscalls support directly returning errors instead of going through errno.
     pub const ULF_NO_ERRNO: u32 = 0x1000000;
@@ -208,10 +213,26 @@ mod apple {
     weak! {
         pub fn __ulock_wake(u32, *mut c_void, u64) -> c_int
     }
+
+    pub(crate) fn wait_operation_for(size: usize, shared: bool) -> u32 {
+        if shared {
+            match size {
+                4 => UL_COMPARE_AND_WAIT_SHARED,
+                8 => UL_COMPARE_AND_WAIT64_SHARED,
+                _ => panic!("invalid futex size of {}", size),
+            }
+        } else {
+            match size {
+                4 => UL_COMPARE_AND_WAIT,
+                8 => UL_COMPARE_AND_WAIT64,
+                _ => panic!("invalid futex size of {}", size),
+            }
+        }
+    }
 }
 
 #[cfg(target_vendor = "apple")]
-fn futex_wait_inner(addr: *mut c_void, size: usize, expected: u64, timeout: Option<Duration>) -> bool {
+fn futex_wait_inner(addr: *mut c_void, size: usize, expected: u64, timeout: Option<Duration>, shared: bool) -> bool {
     use apple::*;
 
     if let Some(timeout) = timeout {
@@ -219,12 +240,18 @@ fn futex_wait_inner(addr: *mut c_void, size: usize, expected: u64, timeout: Opti
         let timeout_ms = timeout.as_micros().clamp(1, u32::MAX as u128) as u32;
 
         if let Some(wait) = os_sync_wait_on_address_with_timeout.get() {
+            let flags = if shared {
+                OS_SYNC_WAIT_ON_ADDRESS_SHARED
+            } else {
+                OS_SYNC_WAIT_ON_ADDRESS_NONE
+            };
+
             let r = unsafe {
                 wait(
                     addr,
                     expected,
                     size,
-                    OS_SYNC_WAIT_ON_ADDRESS_NONE,
+                    flags,
                     OS_CLOCK_MACH_ABSOLUTE_TIME,
                     timeout_ns,
                 )
@@ -237,9 +264,11 @@ fn futex_wait_inner(addr: *mut c_void, size: usize, expected: u64, timeout: Opti
             // futex implementation.
             r != -1 || errno() != libc::ETIMEDOUT
         } else if let Some(wait) = __ulock_wait2.get() {
+            let operation = wait_operation_for(size, shared);
+
             unsafe {
                 wait(
-                    UL_COMPARE_AND_WAIT | ULF_NO_ERRNO,
+                    operation | ULF_NO_ERRNO,
                     addr,
                     expected,
                     timeout_ns,
@@ -247,8 +276,10 @@ fn futex_wait_inner(addr: *mut c_void, size: usize, expected: u64, timeout: Opti
                 ) != -libc::ETIMEDOUT
             }
         } else if let Some(wait) = __ulock_wait.get() {
+            let operation = wait_operation_for(size, shared);
+
             unsafe {
-                wait(UL_COMPARE_AND_WAIT | ULF_NO_ERRNO, addr, expected, timeout_ms)
+                wait(operation | ULF_NO_ERRNO, addr, expected, timeout_ms)
                     != -libc::ETIMEDOUT
             }
         } else {
@@ -256,12 +287,24 @@ fn futex_wait_inner(addr: *mut c_void, size: usize, expected: u64, timeout: Opti
         }
     } else {
         if let Some(wait) = os_sync_wait_on_address.get() {
+            let flags = if shared {
+                OS_SYNC_WAIT_ON_ADDRESS_SHARED
+            } else {
+                OS_SYNC_WAIT_ON_ADDRESS_NONE
+            };
+
             unsafe {
-                wait(addr, expected, size, OS_SYNC_WAIT_ON_ADDRESS_NONE);
+                wait(addr, expected, size, flags);
             }
         } else if let Some(wait) = __ulock_wait.get() {
+            let flags = if shared {
+                OS_SYNC_WAIT_ON_ADDRESS_SHARED
+            } else {
+                OS_SYNC_WAIT_ON_ADDRESS_NONE
+            };
+
             unsafe {
-                wait(UL_COMPARE_AND_WAIT | ULF_NO_ERRNO, addr, expected, 0);
+                wait(flags | ULF_NO_ERRNO, addr, expected, 0);
             }
         } else {
             panic!("your system is below the minimum supported version of Rust");
@@ -277,7 +320,17 @@ pub fn futex_wait(futex: &AtomicU32, expected: u32, timeout: Option<Duration>) -
     let addr = futex.as_ptr().cast();
     let value = expected as u64;
     let size = size_of::<u32>();
-    futex_wait_inner(addr, size, value, timeout)
+    futex_wait_inner(addr, size, value, timeout, false)
+}
+
+#[cfg(target_vendor = "apple")]
+pub fn futex_wait_shared(futex: &AtomicU32, expected: u32, timeout: Option<Duration>) -> bool {
+    use core::mem::size_of;
+
+    let addr = futex.as_ptr().cast();
+    let value = expected as u64;
+    let size = size_of::<u32>();
+    futex_wait_inner(addr, size, value, timeout, true)
 }
 
 #[cfg(target_vendor = "apple")]
@@ -286,7 +339,16 @@ pub fn futex_wait_u64(futex: &AtomicU64, expected: u64, timeout: Option<Duration
 
     let addr = futex.as_ptr().cast();
     let size = size_of::<u64>();
-    futex_wait_inner(addr, size, expected, timeout)
+    futex_wait_inner(addr, size, expected, timeout, false)
+}
+
+#[cfg(target_vendor = "apple")]
+pub fn futex_wait_u64_shared(futex: &AtomicU64, expected: u64, timeout: Option<Duration>) -> bool {
+    use core::mem::size_of;
+
+    let addr = futex.as_ptr().cast();
+    let size = size_of::<u64>();
+    futex_wait_inner(addr, size, expected, timeout, true)
 }
 
 #[cfg(target_vendor = "apple")]
@@ -296,20 +358,37 @@ pub fn futex_wait_ptr<T>(futex: &AtomicPtr<T>, expected: *mut T, timeout: Option
     let addr = futex.as_ptr().cast();
     let size = size_of::<*mut T>();
     let value = expected as u64;
-    futex_wait_inner(addr, size, value, timeout)
+    futex_wait_inner(addr, size, value, timeout, false)
+}
+
+#[cfg(target_vendor = "apple")]
+pub fn futex_wait_ptr_shared<T>(futex: &AtomicPtr<T>, expected: *mut T, timeout: Option<Duration>) -> bool {
+    use core::mem::size_of;
+
+    let addr = futex.as_ptr().cast();
+    let size = size_of::<*mut T>();
+    let value = expected as u64;
+    futex_wait_inner(addr, size, value, timeout, true)
 }
 
 #[cfg(any(target_vendor = "apple"))]
-fn futex_wake_inner(addr: *mut c_void, size: usize) -> bool {
+fn futex_wake_inner(addr: *mut c_void, size: usize, shared: bool) -> bool {
     use apple::*;
-    
+
     if let Some(wake) = os_sync_wake_by_address_any.get() {
-        unsafe { wake(addr, size, OS_SYNC_WAKE_BY_ADDRESS_NONE) == 0 }
+        let flags = if shared {
+            OS_SYNC_WAKE_BY_ADDRESS_SHARED
+        } else {
+            OS_SYNC_WAKE_BY_ADDRESS_NONE
+        };
+
+        unsafe { wake(addr, size, flags) == 0 }
     } else if let Some(wake) = __ulock_wake.get() {
         // __ulock_wake can get interrupted, so retry until either waking up a
         // waiter or failing because there are no waiters (ENOENT).
         loop {
-            let r = unsafe { wake(UL_COMPARE_AND_WAIT | ULF_NO_ERRNO, addr, 0) };
+            let operation = wait_operation_for(size, shared);
+            let r = unsafe { wake(operation | ULF_NO_ERRNO, addr, 0) };
 
             if r >= 0 {
                 return true;
@@ -334,7 +413,15 @@ pub fn futex_wake(futex: &AtomicU32) -> bool {
     use core::mem::size_of;
 
     let addr = futex.as_ptr().cast();
-    futex_wake_inner(addr, size_of::<u32>())
+    futex_wake_inner(addr, size_of::<u32>(), false)
+}
+
+#[cfg(any(target_vendor = "apple"))]
+pub fn futex_wake_shared(futex: &AtomicU32) -> bool {
+    use core::mem::size_of;
+
+    let addr = futex.as_ptr().cast();
+    futex_wake_inner(addr, size_of::<u32>(), true)
 }
 
 #[cfg(any(target_vendor = "apple"))]
@@ -342,7 +429,15 @@ pub fn futex_wake_u64(futex: &AtomicU64) -> bool {
     use core::mem::size_of;
 
     let addr = futex.as_ptr().cast();
-    futex_wake_inner(addr, size_of::<u64>())
+    futex_wake_inner(addr, size_of::<u64>(), false)
+}
+
+#[cfg(any(target_vendor = "apple"))]
+pub fn futex_wake_u64_shared(futex: &AtomicU64) -> bool {
+    use core::mem::size_of;
+
+    let addr = futex.as_ptr().cast();
+    futex_wake_inner(addr, size_of::<u64>(), true)
 }
 
 #[cfg(any(target_vendor = "apple"))]
@@ -350,21 +445,28 @@ pub fn futex_wake_ptr<T>(futex: &AtomicPtr<T>) -> bool {
     use core::mem::size_of;
 
     let addr = futex.as_ptr().cast();
-    futex_wake_inner(addr, size_of::<*mut T>())
+    futex_wake_inner(addr, size_of::<*mut T>(), false)
 }
 
 #[cfg(target_vendor = "apple")]
-fn futex_wake_all_inner(addr: *mut c_void, size: usize) {
+fn futex_wake_all_inner(addr: *mut c_void, size: usize, shared: bool) {
     use apple::*;
     use std::io::Error;
-    
+
     if let Some(wake) = os_sync_wake_by_address_all.get() {
+        let flags = if shared {
+            OS_SYNC_WAKE_BY_ADDRESS_SHARED
+        } else {
+            OS_SYNC_WAKE_BY_ADDRESS_NONE
+        };
+
         unsafe {
-            wake(addr, size, OS_SYNC_WAKE_BY_ADDRESS_NONE);
+            wake(addr, size, flags);
         }
     } else if let Some(wake) = __ulock_wake.get() {
         loop {
-            let r = unsafe { wake(UL_COMPARE_AND_WAIT | ULF_WAKE_ALL | ULF_NO_ERRNO, addr, 0) };
+            let operation = wait_operation_for(size, shared);
+            let r = unsafe { wake(operation | ULF_WAKE_ALL | ULF_NO_ERRNO, addr, 0) };
 
             if r >= 0 {
                 return;
@@ -386,7 +488,15 @@ pub fn futex_wake_all(futex: &AtomicU32) {
     use core::mem::size_of;
 
     let addr = futex.as_ptr().cast();
-    futex_wake_all_inner(addr, size_of::<u32>());
+    futex_wake_all_inner(addr, size_of::<u32>(), false);
+}
+
+#[cfg(target_vendor = "apple")]
+pub fn futex_wake_all_shared(futex: &AtomicU32) {
+    use core::mem::size_of;
+
+    let addr = futex.as_ptr().cast();
+    futex_wake_all_inner(addr, size_of::<u32>(), true);
 }
 
 #[cfg(target_vendor = "apple")]
@@ -394,7 +504,15 @@ pub fn futex_wake_all_u64(futex: &AtomicU64) {
     use core::mem::size_of;
 
     let addr = futex.as_ptr().cast();
-    futex_wake_all_inner(addr, size_of::<u64>());
+    futex_wake_all_inner(addr, size_of::<u64>(), false);
+}
+
+#[cfg(target_vendor = "apple")]
+pub fn futex_wake_all_u64_shared(futex: &AtomicU64) {
+    use core::mem::size_of;
+
+    let addr = futex.as_ptr().cast();
+    futex_wake_all_inner(addr, size_of::<u64>(), true);
 }
 
 #[cfg(target_vendor = "apple")]
@@ -402,7 +520,7 @@ pub fn futex_wake_all_ptr<T>(futex: &AtomicPtr<T>) {
     use core::mem::size_of;
 
     let addr = futex.as_ptr().cast();
-    futex_wake_all_inner(addr, size_of::<*mut T>());
+    futex_wake_all_inner(addr, size_of::<*mut T>(), false);
 }
 
 #[cfg(target_os = "openbsd")]

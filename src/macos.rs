@@ -6,8 +6,8 @@ use crate::unix_futex::*;
 
 // UPDATE 01/12/24
 // There is a pending PR for adding proper futex functionality to macOS, including support for timeouts. In order to add
-// timeout variants to the API the impl has been copied & adapted until the PR lands (or is reworked, whatever the case 
-// may be). Technically it uses undocumented functions as a fallback and could cause issues if this is ever submitted to 
+// timeout variants to the API the impl has been copied & adapted until the PR lands (or is reworked, whatever the case
+// may be). Technically it uses undocumented functions as a fallback and could cause issues if this is ever submitted to
 // Apple's review for macOS/iOS/whatever, so you may not want to use this branch.
 // see PR status here: https://github.com/rust-lang/rust/pull/122408
 
@@ -31,8 +31,18 @@ pub fn wait(a: &AtomicU32, expected: u32) {
 }
 
 #[inline]
+pub fn wait_shared(a: &AtomicU32, expected: u32) {
+    futex_wait_shared(a, expected, None);
+}
+
+#[inline]
 pub fn wait_u64(a: &AtomicU64, expected: u64) {
     futex_wait_u64(a, expected, None);
+}
+
+#[inline]
+pub fn wait_u64_shared(a: &AtomicU64, expected: u64) {
+    futex_wait_u64_shared(a, expected, None);
 }
 
 #[inline]
@@ -46,8 +56,18 @@ pub fn wait_timeout(a: &AtomicU32, expected: u32, timeout: Option<Duration>) -> 
 }
 
 #[inline]
+pub fn wait_timeout_shared(a: &AtomicU32, expected: u32, timeout: Option<Duration>) -> bool {
+    futex_wait_shared(a, expected, timeout)
+}
+
+#[inline]
 pub fn wait_u64_timeout(a: &AtomicU64, expected: u64, timeout: Option<Duration>) -> bool {
     futex_wait_u64(a, expected, timeout)
+}
+
+#[inline]
+pub fn wait_u64_timeout_shared(a: &AtomicU64, expected: u64, timeout: Option<Duration>) -> bool {
+    futex_wait_u64_shared(a, expected, timeout)
 }
 
 #[inline]
@@ -63,9 +83,23 @@ pub fn wake_one(ptr: *const AtomicU32) {
 }
 
 #[inline]
+pub fn wake_one_shared(ptr: *const AtomicU32) {
+    if !ptr.is_null() {
+        futex_wake_shared(unsafe { &*ptr });
+    }
+}
+
+#[inline]
 pub fn wake_all(ptr: *const AtomicU32) {
     if !ptr.is_null() {
         futex_wake_all(unsafe { &*ptr });
+    }
+}
+
+#[inline]
+pub fn wake_all_shared(ptr: *const AtomicU32) {
+    if !ptr.is_null() {
+        futex_wake_all_shared(unsafe { &*ptr });
     }
 }
 
@@ -77,9 +111,9 @@ pub fn wake_one_u64(ptr: *const AtomicU64) {
 }
 
 #[inline]
-pub fn wake_one_ptr<T>(ptr: *const AtomicPtr<T>) {
+pub fn wake_one_u64_shared(ptr: *const AtomicU64) {
     if !ptr.is_null() {
-        futex_wake_ptr(unsafe { &*ptr });
+        futex_wake_u64_shared(unsafe { &*ptr });
     }
 }
 
@@ -87,6 +121,20 @@ pub fn wake_one_ptr<T>(ptr: *const AtomicPtr<T>) {
 pub fn wake_all_u64(ptr: *const AtomicU64) {
     if !ptr.is_null() {
         futex_wake_all_u64(unsafe { &*ptr });
+    }
+}
+
+#[inline]
+pub fn wake_all_u64_shared(ptr: *const AtomicU64) {
+    if !ptr.is_null() {
+        futex_wake_all_u64_shared(unsafe { &*ptr });
+    }
+}
+
+#[inline]
+pub fn wake_one_ptr<T>(ptr: *const AtomicPtr<T>) {
+    if !ptr.is_null() {
+        futex_wake_ptr(unsafe { &*ptr });
     }
 }
 
