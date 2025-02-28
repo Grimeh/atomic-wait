@@ -34,6 +34,7 @@ pub fn wait(atomic: &AtomicU32, value: u32) {
 ///
 /// This function might also return spuriously,
 /// without a corresponding wake operation.
+#[cfg(not(target_os = "windows"))]
 #[inline]
 pub fn wait_shared(atomic: &AtomicU32, value: u32) {
     platform::wait_shared(atomic, value)
@@ -52,6 +53,7 @@ pub fn wait_u64(atomic: &AtomicU64, value: u64) {
 ///
 /// This function might also return spuriously,
 /// without a corresponding wake operation.
+#[cfg(not(target_os = "windows"))]
 #[inline]
 pub fn wait_u64_shared(atomic: &AtomicU64, value: u64) {
     platform::wait_u64_shared(atomic, value)
@@ -82,6 +84,7 @@ pub fn wait_timeout(atomic: &AtomicU32, value: u32, timeout: Option<Duration>) -
 /// without a corresponding wake operation.
 ///
 /// Returns false if the timeout expired
+#[cfg(not(target_os = "windows"))]
 #[inline]
 pub fn wait_timeout_shared(atomic: &AtomicU32, value: u32, timeout: Option<Duration>) -> bool {
     platform::wait_timeout_shared(atomic, value, timeout)
@@ -104,6 +107,7 @@ pub fn wait_u64_timeout(atomic: &AtomicU64, value: u64, timeout: Option<Duration
 /// without a corresponding wake operation.
 ///
 /// Returns false if the timeout expired
+#[cfg(not(target_os = "windows"))]
 #[inline]
 pub fn wait_u64_timeout_shared(atomic: &AtomicU64, value: u64, timeout: Option<Duration>) -> bool {
     platform::wait_u64_timeout_shared(atomic, value, timeout)
@@ -130,6 +134,7 @@ pub fn wake_one(atomic: *const AtomicU32) {
 /// Wake one thread that is waiting on this atomic.
 ///
 /// It's okay if the pointer dangles or is null.
+#[cfg(not(target_os = "windows"))]
 #[inline]
 pub fn wake_one_shared(atomic: *const AtomicU32) {
     platform::wake_one_shared(atomic);
@@ -146,6 +151,7 @@ pub fn wake_one_u64(atomic: *const AtomicU64) {
 /// Wake one thread that is waiting on this atomic.
 ///
 /// It's okay if the pointer dangles or is null.
+#[cfg(not(target_os = "windows"))]
 #[inline]
 pub fn wake_one_u64_shared(atomic: *const AtomicU64) {
     platform::wake_one_u64_shared(atomic);
@@ -175,6 +181,7 @@ pub fn wake_all(atomic: *const AtomicU32) {
 /// Wake all threads that are waiting on this atomic.
 ///
 /// It's okay if the pointer dangles or is null.
+#[cfg(not(target_os = "windows"))]
 #[inline]
 pub fn wake_all_shared(atomic: *const AtomicU32) {
     platform::wake_all_shared(atomic);
@@ -191,6 +198,7 @@ pub fn wake_all_u64(atomic: *const AtomicU64) {
 /// Wake all threads that are waiting on this atomic.
 ///
 /// It's okay if the pointer dangles or is null.
+#[cfg(not(target_os = "windows"))]
 #[inline]
 pub fn wake_all_u64_shared(atomic: *const AtomicU64) {
     platform::wake_all_u64_shared(atomic);
