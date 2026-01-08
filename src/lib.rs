@@ -63,6 +63,7 @@ pub fn wait_u64_shared(atomic: &AtomicU64, value: u64) {
 ///
 /// This function might also return spuriously,
 /// without a corresponding wake operation.
+#[cfg(feature = "ptr")]
 pub fn wait_ptr<T>(atomic: &AtomicPtr<T>, value: *mut T) {
     platform::wait_ptr(atomic, value)
 }
@@ -119,6 +120,7 @@ pub fn wait_u64_timeout_shared(atomic: &AtomicU64, value: u64, timeout: Option<D
 /// without a corresponding wake operation.
 ///
 /// Returns false if the timeout expired
+#[cfg(feature = "ptr")]
 pub fn wait_ptr_timeout<T>(atomic: &AtomicPtr<T>, value: *mut T, timeout: Option<Duration>) -> bool {
     platform::wait_ptr_timeout(atomic, value, timeout)
 }
@@ -161,6 +163,7 @@ pub fn wake_one_u64_shared(atomic: *const AtomicU64) {
 ///
 /// It's okay if the pointer dangles or is null.
 #[inline]
+#[cfg(feature = "ptr")]
 pub fn wake_one_ptr<T>(atomic: *const AtomicPtr<T>) {
     const {
         // assert we're not trying to use a fat pointer
@@ -207,6 +210,7 @@ pub fn wake_all_u64_shared(atomic: *const AtomicU64) {
 /// Wake all threads that are waiting on this atomic.
 ///
 /// It's okay if the pointer dangles or is null.
+#[cfg(feature = "ptr")]
 pub fn wake_all_ptr<T>(atomic: *const AtomicPtr<T>) {
     const {
         // assert we're not trying to use a fat pointer
