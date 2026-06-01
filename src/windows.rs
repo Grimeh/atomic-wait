@@ -1,3 +1,8 @@
+#![cfg(any(
+    target_os = "windows",
+))]
+#![allow(dead_code)]
+
 use core::sync::atomic::{AtomicPtr, AtomicU32, AtomicU64};
 use std::time::Duration;
 use windows_sys::Win32::Foundation::{GetLastError, ERROR_TIMEOUT};

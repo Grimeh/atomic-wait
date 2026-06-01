@@ -1,7 +1,12 @@
 #![doc = include_str!("../README.md")]
+#![feature(macro_metavar_expr_concat)]
+#![feature(io_const_error)]
 
-use core::sync::atomic::{AtomicPtr, AtomicU32, AtomicU64};
+use core::sync::atomic::{AtomicU32, AtomicU64};
 use std::time::Duration;
+
+#[cfg(feature = "ptr")]
+use core::sync::atomic::AtomicPtr;
 
 mod unix_futex;
 
@@ -72,7 +77,7 @@ pub fn wait_ptr<T>(atomic: &AtomicPtr<T>, value: *mut T) {
 ///
 /// This function might also return spuriously,
 /// without a corresponding wake operation.
-/// 
+///
 /// Returns false if the timeout expired
 #[inline]
 pub fn wait_timeout(atomic: &AtomicU32, value: u32, timeout: Option<Duration>) -> bool {
