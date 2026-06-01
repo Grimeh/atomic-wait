@@ -27,7 +27,7 @@ use core::sync::atomic::{self, AtomicPtr, Ordering};
 use core::{mem, ptr};
 
 // We can use true weak linkage on ELF targets.
-#[cfg(all(unix, not(target_vendor = "apple")))]
+#[cfg(all(target_os = "linux", not(target_vendor = "apple")))]
 macro_rules! weak {
     (fn $name:ident($($t:ty),*) -> $ret:ty) => (
         let ref $name: ExternWeak<unsafe extern "C" fn($($t),*) -> $ret> = {

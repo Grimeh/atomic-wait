@@ -6,8 +6,6 @@
 
 use libc::{c_char, c_int, c_void};
 
-#[cfg(all(target_env = "gnu", not(target_os = "vxworks")))]
-use crate::sys::weak::weak;
 use crate::unix_futex::util::{run_path_with_cstr, run_with_cstr, unique_thread_exit};
 use std::error::Error as StdError;
 use std::ffi::{CStr, CString, OsStr, OsString};
@@ -294,7 +292,7 @@ pub fn current_exe() -> io::Result<PathBuf> {
         for search_path in split_paths(&p) {
             let pb = search_path.join(&path);
             if pb.is_file() {
-                if let Ok(metadata) = crate::fs::metadata(&pb) {
+                if let Ok(metadata) = std::fs::metadata(&pb) {
                     if metadata.permissions().mode() & 0o111 != 0 {
                         return pb.canonicalize();
                     }
@@ -387,7 +385,7 @@ pub fn current_exe() -> io::Result<PathBuf> {
     fn procfs() -> io::Result<PathBuf> {
         let curproc_exe = path::Path::new("/proc/curproc/exe");
         if curproc_exe.is_file() {
-            return crate::fs::read_link(curproc_exe);
+            return std::fs::read_link(curproc_exe);
         }
         Err(io::const_error!(
             io::ErrorKind::Uncategorized,
@@ -434,7 +432,7 @@ pub fn current_exe() -> io::Result<PathBuf> {
         }
         let argv0 = CStr::from_ptr(argv[0]).to_bytes();
         if argv0[0] == b'.' || argv0.iter().any(|b| *b == b'/') {
-            crate::fs::canonicalize(OsStr::from_bytes(argv0))
+            std::fs::canonicalize(OsStr::from_bytes(argv0))
         } else {
             Ok(PathBuf::from(OsStr::from_bytes(argv0)))
         }
@@ -449,7 +447,7 @@ pub fn current_exe() -> io::Result<PathBuf> {
     target_os = "emscripten"
 ))]
 pub fn current_exe() -> io::Result<PathBuf> {
-    match crate::fs::read_link("/proc/self/exe") {
+    match std::fs::read_link("/proc/self/exe") {
         Err(ref e) if e.kind() == io::ErrorKind::NotFound => Err(io::const_error!(
             io::ErrorKind::Uncategorized,
             "no /proc/self/exe available. Is /proc mounted?",
@@ -460,7 +458,7 @@ pub fn current_exe() -> io::Result<PathBuf> {
 
 #[cfg(target_os = "nto")]
 pub fn current_exe() -> io::Result<PathBuf> {
-    let mut e = crate::fs::read("/proc/self/exefile")?;
+    let mut e = std::fs::read("/proc/self/exefile")?;
     // Current versions of QNX Neutrino provide a null-terminated path.
     // Ensure the trailing null byte is not returned here.
     if let Some(0) = e.last() {
@@ -489,7 +487,7 @@ pub fn current_exe() -> io::Result<PathBuf> {
 
 #[cfg(any(target_os = "solaris", target_os = "illumos"))]
 pub fn current_exe() -> io::Result<PathBuf> {
-    if let Ok(path) = crate::fs::read_link("/proc/self/path/a.out") {
+    if let Ok(path) = std::fs::read_link("/proc/self/path/a.out") {
         Ok(path)
     } else {
         unsafe {
@@ -539,7 +537,7 @@ pub fn current_exe() -> io::Result<PathBuf> {
 
 #[cfg(any(target_os = "redox", target_os = "rtems"))]
 pub fn current_exe() -> io::Result<PathBuf> {
-    crate::fs::read_to_string("sys:exe").map(PathBuf::from)
+    std::fs::read_to_string("sys:exe").map(PathBuf::from)
 }
 
 #[cfg(target_os = "l4re")]

@@ -99,7 +99,7 @@ cfg_if::cfg_if! {
         #[cfg_attr(any(test, doctest), allow(dead_code))]
         pub(crate) fn unique_thread_exit() {
             let this_thread_id = unsafe { libc::pthread_self() };
-            use crate::sync::{Mutex, PoisonError};
+            use std::sync::{Mutex, PoisonError};
             static EXITING_THREAD_ID: Mutex<Option<PThread>> = Mutex::new(None);
             let mut exiting_thread_id =
                 EXITING_THREAD_ID.lock().unwrap_or_else(PoisonError::into_inner);
