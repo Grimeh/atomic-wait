@@ -2,9 +2,7 @@
 #![feature(macro_metavar_expr_concat)]
 #![feature(io_const_error)]
 #![feature(io_error_uncategorized)]
-#![feature(cfg_select)]
 #![feature(temporary_niche_types)]
-#![feature(panic_internals)]
 #![feature(generic_atomic)]
 
 use core::sync::atomic::AtomicU32;
