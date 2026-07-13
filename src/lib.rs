@@ -4,6 +4,7 @@
 #![feature(io_error_uncategorized)]
 #![feature(temporary_niche_types)]
 #![feature(generic_atomic)]
+#![cfg_attr(target_os = "linux", feature(panic_internals))]
 
 use core::sync::atomic::AtomicU32;
 use std::time::Duration;
