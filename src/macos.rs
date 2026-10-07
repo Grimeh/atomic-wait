@@ -47,28 +47,20 @@ pub fn wait_timeout_shared(a: &AtomicU32, expected: u32, timeout: Option<Duratio
 
 #[inline]
 pub fn wake_one(ptr: &AtomicU32) {
-    if !ptr.is_null() {
-        futex_wake(unsafe { &*ptr }, false);
-    }
+    futex_wake(ptr, false);
 }
 
 #[inline]
 pub fn wake_one_shared(ptr: &AtomicU32) {
-    if !ptr.is_null() {
-        futex_wake(unsafe { &*ptr }, true);
-    }
+    futex_wake(ptr, true);
 }
 
 #[inline]
 pub fn wake_all(ptr: &AtomicU32) {
-    if !ptr.is_null() {
-        futex_wake_all(unsafe { &*ptr }, false);
-    }
+    futex_wake_all(ptr, false);
 }
 
 #[inline]
 pub fn wake_all_shared(ptr: &AtomicU32) {
-    if !ptr.is_null() {
-        futex_wake_all(unsafe { &*ptr }, true);
-    }
+    futex_wake_all(ptr, true);
 }

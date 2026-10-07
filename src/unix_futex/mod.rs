@@ -153,34 +153,34 @@ mod apple {
 
     // These functions appeared with macOS 14.4, iOS 17.4, tvOS 17.4, watchOS 10.4, visionOS 1.1.
     weak! {
-        pub fn os_sync_wait_on_address(addr: *mut c_void, value: u64, size: usize, flags: u32) -> c_int;
+        pub fn os_sync_wait_on_address(*mut c_void, u64, usize, u32) -> c_int
     }
 
     weak! {
-        pub fn os_sync_wait_on_address_with_timeout(addr: *mut c_void, value: u64, size: usize, flags: u32, clockid: u32, timeout_ns: u64) -> c_int;
+        pub fn os_sync_wait_on_address_with_timeout(*mut c_void, u64, usize, u32, u32, u64) -> c_int
     }
 
     weak! {
-        pub fn os_sync_wake_by_address_any(addr: *mut c_void, size: usize, flags: u32) -> c_int;
+        pub fn os_sync_wake_by_address_any(*mut c_void, usize, u32) -> c_int
     }
 
     weak! {
-        pub fn os_sync_wake_by_address_all(addr: *mut c_void, size: usize, flags: u32) -> c_int;
+        pub fn os_sync_wake_by_address_all(*mut c_void, usize, u32) -> c_int
     }
 
     // This syscall appeared with macOS 11.0.
     // It is used to support nanosecond precision for timeouts, among other features.
     weak! {
-        pub fn __ulock_wait2(operation: u32, addr: *mut c_void, value: u64, timeout: u64, value2: u64) -> c_int;
+        pub fn __ulock_wait2(u32, *mut c_void, u64, u64, u64) -> c_int
     }
 
     // These syscalls appeared with macOS 10.12.
     weak! {
-        pub fn __ulock_wait(operation: u32, addr: *mut c_void, value: u64, timeout: u32) -> c_int;
+        pub fn __ulock_wait(u32, *mut c_void, u64, u32) -> c_int
     }
 
     weak! {
-        pub fn __ulock_wake(operation: u32, addr: *mut c_void, wake_value: u64) -> c_int;
+        pub fn __ulock_wake(u32, *mut c_void, u64) -> c_int
     }
 }
 
@@ -188,7 +188,7 @@ mod apple {
 pub fn futex_wait(futex: &Atomic<u32>, expected: u32, timeout: Option<Duration>, shared: bool) -> bool {
     use apple::*;
 
-    use crate::mem::size_of;
+    use core::mem::size_of;
 
     let addr = futex.as_ptr().cast();
     let value = expected as u64;
@@ -218,7 +218,7 @@ pub fn futex_wait(futex: &Atomic<u32>, expected: u32, timeout: Option<Duration>,
 
             // We promote spurious wakeups (reported as EINTR) to normal ones for
             // simplicity.
-            r != -1 || super::os::errno() != libc::ETIMEDOUT
+            r != -1 || std::io::Error::last_os_error().raw_os_error().unwrap() != libc::ETIMEDOUT
         } else if let Some(wait) = __ulock_wait2.get() {
             let r = unsafe { wait(operation | ULF_NO_ERRNO, addr, value, timeout_ns, 0) };
 
@@ -236,7 +236,7 @@ pub fn futex_wait(futex: &Atomic<u32>, expected: u32, timeout: Option<Duration>,
             // ≈ 1 hour, so it should be considered.
             r != -libc::ETIMEDOUT || truncated
         } else {
-            rtabort!("your system is below the minimum supported version of Rust");
+            panic!("your system is below the minimum supported version of Rust");
         }
     } else {
         if let Some(wait) = os_sync_wait_on_address.get() {
@@ -246,7 +246,7 @@ pub fn futex_wait(futex: &Atomic<u32>, expected: u32, timeout: Option<Duration>,
         } else if let Some(wait) = __ulock_wait.get() {
             unsafe { wait(operation | ULF_NO_ERRNO, addr, value, 0) };
         } else {
-            rtabort!("your system is below the minimum supported version of Rust");
+            panic!("your system is below the minimum supported version of Rust");
         }
 
         true
@@ -257,8 +257,8 @@ pub fn futex_wait(futex: &Atomic<u32>, expected: u32, timeout: Option<Duration>,
 pub fn futex_wake(futex: &Atomic<u32>, shared: bool) -> bool {
     use apple::*;
 
-    use crate::io::Error;
-    use crate::mem::size_of;
+    use std::io::Error;
+    use std::mem::size_of;
 
     let flags = if shared {
         OS_SYNC_WAKE_BY_ADDRESS_SHARED
@@ -273,10 +273,10 @@ pub fn futex_wake(futex: &Atomic<u32>, shared: bool) -> bool {
         if r == 0 {
             true
         } else {
-            match super::os::errno() {
+            match Error::last_os_error().raw_os_error().unwrap() {
                 // There were no waiters to wake up.
                 libc::ENOENT => false,
-                err => rtabort!("__ulock_wake failed: {}", Error::from_raw_os_error(err)),
+                err => panic!("__ulock_wake failed: {}", Error::from_raw_os_error(err)),
             }
         }
     } else if let Some(wake) = __ulock_wake.get() {
@@ -292,12 +292,12 @@ pub fn futex_wake(futex: &Atomic<u32>, shared: bool) -> bool {
                 match -r {
                     libc::ENOENT => return false,
                     libc::EINTR => continue,
-                    err => rtabort!("__ulock_wake failed: {}", Error::from_raw_os_error(err)),
+                    err => panic!("__ulock_wake failed: {}", Error::from_raw_os_error(err)),
                 }
             }
         }
     } else {
-        rtabort!("your system is below the minimum supported version of Rust");
+        panic!("your system is below the minimum supported version of Rust");
     }
 }
 
@@ -305,8 +305,8 @@ pub fn futex_wake(futex: &Atomic<u32>, shared: bool) -> bool {
 pub fn futex_wake_all(futex: &Atomic<u32>, shared: bool) {
     use apple::*;
 
-    use crate::io::Error;
-    use crate::mem::size_of;
+    use std::io::Error;
+    use std::mem::size_of;
 
     let flags = if shared {
         OS_SYNC_WAKE_BY_ADDRESS_SHARED
